@@ -21,6 +21,50 @@ class WarGame(ndb.Model):
     bot_deck = ndb.StringProperty(repeated=True)
     game_over = ndb.BooleanProperty(required=True, default=False)
 
+    @classmethod
+    def new_game(cls, user):
+        """Creates and returns a new game"""
+        # Generate card deck and shuffle
+        deck = ['2','3','4','5','6','7','8','9','10','J','Q','K','A'] * 4
+        random.shuffle(deck)
+        deck1 = deck[0:26]
+        deck2 = deck[26:52]
+
+        game = WarGame(user=user,
+                       user_deck=deck1,
+                       bot_deck=deck2,
+                       game_over=False)
+        game.put()
+        return game
+
+    def to_form(self, message):
+        """Returns a WarGameForm representation of the WarGame"""
+        form = WarGameForm()
+        form.urlsafe_key = self.key.urlsafe()
+        form.user_name = self.user.get().name
+        form.user_deck = self.user_deck
+        form.bot_deck = self.bot_deck
+        form.game_over = self.game_over
+        form.message = message
+        return form
+
+
+class WarGameForm(messages.Message):
+    """Game form for outbound api response data"""
+    urlsafe_key = messages.StringField(1, required=True)
+    user_name = messages.StringField(2, required=True)
+    user_deck = messages.StringField(3, repeated=True)
+    bot_deck= messages.StringField(4, repeated=True)
+    message = messages.StringField(5, required=True)
+    game_over = messages.BooleanField(6, required=True)
+
+
+class NewWarGameForm(messages.Message):
+    """Used to create a new game"""
+    user_name = messages.StringField(1, required=True)
+
+# -----------------------------------------------------------------------------
+
 class Game(ndb.Model):
     """Game object"""
     target = ndb.IntegerProperty(required=True)

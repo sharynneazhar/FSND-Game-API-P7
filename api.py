@@ -12,6 +12,8 @@ from google.appengine.api import memcache
 from google.appengine.api import taskqueue
 
 from models import WarGame
+from models import WarGameForm, NewWarGameForm
+
 from models import User, Game, Score
 from models import StringMessage, NewGameForm, GameForm, MakeMoveForm,\
     ScoreForms
@@ -25,6 +27,9 @@ MAKE_MOVE_REQUEST = endpoints.ResourceContainer(
     urlsafe_game_key=messages.StringField(1))
 USER_REQUEST = endpoints.ResourceContainer(user_name=messages.StringField(1),
                                            email=messages.StringField(2))
+
+
+NEW_WAR_GAME_REQUEST = endpoints.ResourceContainer(NewWarGameForm)
 
 MEMCACHE_MOVES_REMAINING = 'MOVES_REMAINING'
 
@@ -45,6 +50,29 @@ class WarApi(remote.Service):
         user.put()
         return StringMessage(message='User {} created!'.format(
                 request.user_name))
+
+    @endpoints.method(request_message=NEW_WAR_GAME_REQUEST,
+                      response_message=WarGameForm,
+                      path='game',
+                      name='new_game',
+                      http_method='POST')
+    def new_game(self, request):
+        """Creates new game"""
+        user = User.query(User.name == request.user_name).get()
+        if not user:
+            raise endpoints.NotFoundException(
+                    'A User with that name does not exist!')
+
+        try:
+            game = WarGame.new_game(user.key)
+        except ValueError:
+            raise endpoints.BadRequestException('Error creating new game.')
+
+        # Use a task queue to update the average attempts remaining.
+        # This operation is not needed to complete the creation of a new game
+        # so it is performed out of sequence.
+        #taskqueue.add(url='/tasks/cache_average_attempts')
+        return game.to_form('Good luck playing the game of War!')
 
 # -----------------------------------------------------------------------------
 
