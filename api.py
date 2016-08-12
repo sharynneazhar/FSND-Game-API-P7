@@ -11,6 +11,7 @@ from protorpc import remote, messages
 from google.appengine.api import memcache
 from google.appengine.api import taskqueue
 
+from models import WarGame
 from models import User, Game, Score
 from models import StringMessage, NewGameForm, GameForm, MakeMoveForm,\
     ScoreForms
@@ -18,14 +19,34 @@ from utils import get_by_urlsafe
 
 NEW_GAME_REQUEST = endpoints.ResourceContainer(NewGameForm)
 GET_GAME_REQUEST = endpoints.ResourceContainer(
-        urlsafe_game_key=messages.StringField(1),)
+        urlsafe_game_key=messages.StringField(1))
 MAKE_MOVE_REQUEST = endpoints.ResourceContainer(
     MakeMoveForm,
-    urlsafe_game_key=messages.StringField(1),)
+    urlsafe_game_key=messages.StringField(1))
 USER_REQUEST = endpoints.ResourceContainer(user_name=messages.StringField(1),
                                            email=messages.StringField(2))
 
 MEMCACHE_MOVES_REMAINING = 'MOVES_REMAINING'
+
+@endpoints.api(name='war', version='v1')
+class WarApi(remote.Service):
+    """War API"""
+    @endpoints.method(request_message=USER_REQUEST,
+                      response_message=StringMessage,
+                      path='user',
+                      name='create_user',
+                      http_method='POST')
+    def create_user(self, request):
+        """Create a User. Requires a unique username"""
+        if User.query(User.name == request.user_name).get():
+            raise endpoints.ConflictException(
+                    'A User with that name already exists!')
+        user = User(name=request.user_name, email=request.email)
+        user.put()
+        return StringMessage(message='User {} created!'.format(
+                request.user_name))
+
+# -----------------------------------------------------------------------------
 
 @endpoints.api(name='guess_a_number', version='v1')
 class GuessANumberApi(remote.Service):
@@ -153,4 +174,7 @@ class GuessANumberApi(remote.Service):
                          'The average moves remaining is {:.2f}'.format(average))
 
 
-api = endpoints.api_server([GuessANumberApi])
+api = endpoints.api_server([
+    GuessANumberApi,
+    WarApi
+])
