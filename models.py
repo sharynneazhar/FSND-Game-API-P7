@@ -50,7 +50,7 @@ class Game(ndb.Model):
 
 
 class GenericMessage(messages.Message):
-    """StringMessage-- outbound (single) string message"""
+    """GenericMessage-- outbound (single) string message"""
     message = messages.StringField(1, required=True)
 
 

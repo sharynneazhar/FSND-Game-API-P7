@@ -86,8 +86,7 @@ class WarApi(remote.Service):
         game = get_by_urlsafe(request.urlsafe_game_key, Game)
         if game:
             game.key.delete()
-            return GenericMessage(message='Game by {} was canceled')\
-                .format(game.user_name)
+            return GenericMessage(message='Game was canceled')
         else:
             raise endpoints.NotFoundException('Game not found!')
 
