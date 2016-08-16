@@ -11,48 +11,42 @@ from protorpc import remote, messages
 from google.appengine.api import memcache
 from google.appengine.api import taskqueue
 
-from models import WarGame
-from models import WarGameForm, NewWarGameForm
+from models import User, Game
 
-from models import User, Game, Score
-from models import StringMessage, NewGameForm, GameForm, MakeMoveForm,\
-    ScoreForms
+from models import GenericMessage
+from models import UserResource
+from models import GameResource
+from models import NewGameResource
+
 from utils import get_by_urlsafe
 
-NEW_GAME_REQUEST = endpoints.ResourceContainer(NewGameForm)
+USER_REQUEST = endpoints.ResourceContainer(UserResource)
+NEW_GAME_REQUEST = endpoints.ResourceContainer(NewGameResource)
 GET_GAME_REQUEST = endpoints.ResourceContainer(
-        urlsafe_game_key=messages.StringField(1))
-MAKE_MOVE_REQUEST = endpoints.ResourceContainer(
-    MakeMoveForm,
     urlsafe_game_key=messages.StringField(1))
-USER_REQUEST = endpoints.ResourceContainer(user_name=messages.StringField(1),
-                                           email=messages.StringField(2))
+CANCEL_GAME_REQUEST = endpoints.ResourceContainer(
+    urlsafe_game_key=messages.StringField(1))
 
-
-NEW_WAR_GAME_REQUEST = endpoints.ResourceContainer(NewWarGameForm)
-
-MEMCACHE_MOVES_REMAINING = 'MOVES_REMAINING'
 
 @endpoints.api(name='war', version='v1')
 class WarApi(remote.Service):
     """War API"""
     @endpoints.method(request_message=USER_REQUEST,
-                      response_message=StringMessage,
+                      response_message=GenericMessage,
                       path='user',
                       name='create_user',
                       http_method='POST')
     def create_user(self, request):
         """Create a User. Requires a unique username"""
         if User.query(User.name == request.user_name).get():
-            raise endpoints.ConflictException(
-                    'A User with that name already exists!')
+            raise endpoints.ConflictException('User already exists!')
         user = User(name=request.user_name, email=request.email)
         user.put()
-        return StringMessage(message='User {} created!'.format(
-                request.user_name))
+        return GenericMessage(message='User {} created!'\
+            .format(request.user_name))
 
-    @endpoints.method(request_message=NEW_WAR_GAME_REQUEST,
-                      response_message=WarGameForm,
+    @endpoints.method(request_message=NEW_GAME_REQUEST,
+                      response_message=GameResource,
                       path='game',
                       name='new_game',
                       http_method='POST')
@@ -60,66 +54,17 @@ class WarApi(remote.Service):
         """Creates new game"""
         user = User.query(User.name == request.user_name).get()
         if not user:
-            raise endpoints.NotFoundException(
-                    'A User with that name does not exist!')
+            raise endpoints.NotFoundException('User does not exist!')
 
         try:
-            game = WarGame.new_game(user.key)
+            game = Game.new_game(user.key)
         except ValueError:
             raise endpoints.BadRequestException('Error creating new game.')
 
-        # Use a task queue to update the average attempts remaining.
-        # This operation is not needed to complete the creation of a new game
-        # so it is performed out of sequence.
-        #taskqueue.add(url='/tasks/cache_average_attempts')
         return game.to_form('Good luck playing the game of War!')
 
-# -----------------------------------------------------------------------------
-
-@endpoints.api(name='guess_a_number', version='v1')
-class GuessANumberApi(remote.Service):
-    """Game API"""
-    @endpoints.method(request_message=USER_REQUEST,
-                      response_message=StringMessage,
-                      path='user',
-                      name='create_user',
-                      http_method='POST')
-    def create_user(self, request):
-        """Create a User. Requires a unique username"""
-        if User.query(User.name == request.user_name).get():
-            raise endpoints.ConflictException(
-                    'A User with that name already exists!')
-        user = User(name=request.user_name, email=request.email)
-        user.put()
-        return StringMessage(message='User {} created!'.format(
-                request.user_name))
-
-    @endpoints.method(request_message=NEW_GAME_REQUEST,
-                      response_message=GameForm,
-                      path='game',
-                      name='new_game',
-                      http_method='POST')
-    def new_game(self, request):
-        """Creates new game"""
-        user = User.query(User.name == request.user_name).get()
-        if not user:
-            raise endpoints.NotFoundException(
-                    'A User with that name does not exist!')
-        try:
-            game = Game.new_game(user.key, request.min,
-                                 request.max, request.attempts)
-        except ValueError:
-            raise endpoints.BadRequestException('Maximum must be greater '
-                                                'than minimum!')
-
-        # Use a task queue to update the average attempts remaining.
-        # This operation is not needed to complete the creation of a new game
-        # so it is performed out of sequence.
-        taskqueue.add(url='/tasks/cache_average_attempts')
-        return game.to_form('Good luck playing Guess a Number!')
-
     @endpoints.method(request_message=GET_GAME_REQUEST,
-                      response_message=GameForm,
+                      response_message=GameResource,
                       path='game/{urlsafe_game_key}',
                       name='get_game',
                       http_method='GET')
@@ -127,82 +72,39 @@ class GuessANumberApi(remote.Service):
         """Return the current game state."""
         game = get_by_urlsafe(request.urlsafe_game_key, Game)
         if game:
-            return game.to_form('Time to make a move!')
+            return game.to_form('Aw snap, the game is getting intense')
         else:
             raise endpoints.NotFoundException('Game not found!')
 
-    @endpoints.method(request_message=MAKE_MOVE_REQUEST,
-                      response_message=GameForm,
-                      path='game/{urlsafe_game_key}',
-                      name='make_move',
-                      http_method='PUT')
-    def make_move(self, request):
-        """Makes a move. Returns a game state with message"""
+    @endpoints.method(request_message=CANCEL_GAME_REQUEST,
+                      response_message=GenericMessage,
+                      path='game/{urlsafe_game_key}/cancel',
+                      name='cancel_game',
+                      http_method='POST')
+    def cancel_game(self, request):
+        """Cancels (deletes from datastore) an active game."""
         game = get_by_urlsafe(request.urlsafe_game_key, Game)
-        if game.game_over:
-            return game.to_form('Game already over!')
-
-        game.attempts_remaining -= 1
-        if request.guess == game.target:
-            game.end_game(True)
-            return game.to_form('You win!')
-
-        if request.guess < game.target:
-            msg = 'Too low!'
+        if game:
+            game.key.delete()
+            return GenericMessage(message='Game by {} was canceled')\
+                .format(game.user_name)
         else:
-            msg = 'Too high!'
-
-        if game.attempts_remaining < 1:
-            game.end_game(False)
-            return game.to_form(msg + ' Game over!')
-        else:
-            game.put()
-            return game.to_form(msg)
-
-    @endpoints.method(response_message=ScoreForms,
-                      path='scores',
-                      name='get_scores',
-                      http_method='GET')
-    def get_scores(self, request):
-        """Return all scores"""
-        return ScoreForms(items=[score.to_form() for score in Score.query()])
-
-    @endpoints.method(request_message=USER_REQUEST,
-                      response_message=ScoreForms,
-                      path='scores/user/{user_name}',
-                      name='get_user_scores',
-                      http_method='GET')
-    def get_user_scores(self, request):
-        """Returns all of an individual User's scores"""
-        user = User.query(User.name == request.user_name).get()
-        if not user:
-            raise endpoints.NotFoundException(
-                    'A User with that name does not exist!')
-        scores = Score.query(Score.user == user.key)
-        return ScoreForms(items=[score.to_form() for score in scores])
-
-    @endpoints.method(response_message=StringMessage,
-                      path='games/average_attempts',
-                      name='get_average_attempts_remaining',
-                      http_method='GET')
-    def get_average_attempts(self, request):
-        """Get the cached average moves remaining"""
-        return StringMessage(message=memcache.get(MEMCACHE_MOVES_REMAINING) or '')
-
-    @staticmethod
-    def _cache_average_attempts():
-        """Populates memcache with the average moves remaining of Games"""
-        games = Game.query(Game.game_over == False).fetch()
-        if games:
-            count = len(games)
-            total_attempts_remaining = sum([game.attempts_remaining
-                                        for game in games])
-            average = float(total_attempts_remaining)/count
-            memcache.set(MEMCACHE_MOVES_REMAINING,
-                         'The average moves remaining is {:.2f}'.format(average))
+            raise endpoints.NotFoundException('Game not found!')
 
 
-api = endpoints.api_server([
-    GuessANumberApi,
-    WarApi
-])
+    ## TODO add ability to retrieve a particular user's active games
+    ## get_user_games
+
+    ## TODO add battle endpoint method
+
+    ## TODO add war endpoint method
+
+    ## TODO manage card stacks
+
+    ## TODO add ability to track user rankings by win/loss
+    ## get_user_rankings
+
+    ## TODO add ability to track a game history
+    ## get_game_history
+
+api = endpoints.api_server([WarApi])
