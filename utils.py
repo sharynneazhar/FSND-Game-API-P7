@@ -33,3 +33,9 @@ def get_by_urlsafe(urlsafe, model):
     if not isinstance(entity, model):
         raise ValueError('Incorrect Kind')
     return entity
+
+
+def getRank(cardValue):
+    """Return the numeric value of a card -- important for face cards"""
+    return { '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8, '9': 9,
+        '10': 10, 'J': 11, 'Q': 12, 'K': 13, 'A': 14 }[cardValue]

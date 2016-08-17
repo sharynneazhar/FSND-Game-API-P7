@@ -4,7 +4,7 @@ This can also contain game logic. For more complex games it would be wise to
 move game logic to another file. Ideally the API will be simple, concerned
 primarily with communication to/from the API's users."""
 
-
+import random
 import logging
 import endpoints
 from protorpc import remote, messages
@@ -30,6 +30,8 @@ CANCEL_GAME_REQUEST = endpoints.ResourceContainer(
     urlsafe_game_key = messages.StringField(1))
 CURRENT_GAMES_REQUEST = endpoints.ResourceContainer(
     user_name = messages.StringField(1))
+BATTLE_REQUEST = endpoints.ResourceContainer(
+    urlsafe_game_key = messages.StringField(1))
 
 
 @endpoints.api(name='war', version='v1')
@@ -110,9 +112,44 @@ class WarApi(remote.Service):
         else:
             raise endpoints.NotFoundException('Game not found!')
 
+    @endpoints.method(request_message=BATTLE_REQUEST,
+                      response_message=GameResource,
+                      path='game/{urlsafe_game_key}/battle',
+                      name='battle',
+                      http_method='PUT')
+    def battle(self, request):
+        """Battle -- reveal top card from deck. Returns the game state"""
+        game = get_by_urlsafe(request.urlsafe_game_key, Game)
+
+        if game.game_over:
+            return game.to_form('Game already over')
+
+        user_card = game.user_deck.pop(0)
+        bot_card = game.bot_deck.pop(0)
+        result = 'Bot: ' + bot_card + '; You: ' + user_card + ' '
+
+        if (getRank(user_card) > getRank(bot_card)):
+            game.user_deck.extend([user_card, bot_card])
+            msg = 'You win this round!'
+        elif (getRank(user_card) < getRank(bot_card)):
+            game.bot_deck.extend([user_card, bot_card])
+            msg = 'The bot won this time...'
+        else:
+            ## TODO start war round
+            msg = 'It\'s a tie!'
+
+        if len(game.user_deck) == 52:
+            game.end_game(True)
+            return game.to_form(result + msg + ' Game over!')
+        elif len(game.bot_deck) == 52:
+            game.end_game(False)
+            return game.to_form(result + msg + ' Game over!')
+        else:
+            game.put()
+            return game.to_form(result + msg)
 
 
-    ## TODO add battle endpoint method
+
 
     ## TODO add war endpoint method
 

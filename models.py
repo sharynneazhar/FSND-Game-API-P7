@@ -25,10 +25,10 @@ class Game(ndb.Model):
     def new_game(cls, user):
         """Creates and returns a new game"""
         # Generate card deck and shuffle
-        deck = ['2','3','4','5','6','7','8','9','10','J','Q','K','A'] * 4
+        deck = ['2','3','4','5','6','7','8','9','10','J','Q','K','A'] * 2
         random.shuffle(deck)
-        deck1 = deck[0:26]
-        deck2 = deck[26:52]
+        deck1 = deck[0:13]
+        deck2 = deck[13:26]
 
         game = Game(user=user,
                     user_deck=deck1,
@@ -47,6 +47,12 @@ class Game(ndb.Model):
         form.game_over = self.game_over
         form.message = message
         return form
+
+    def end_game(self, won=False):
+        """Ends the game -- if won is True, the player won;
+        if won is False, the player lost"""
+        self.game_over = True
+        self.put()
 
 
 class GenericMessage(messages.Message):
