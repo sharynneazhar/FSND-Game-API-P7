@@ -14,23 +14,26 @@ from google.appengine.api import taskqueue
 from models import User, Game
 
 from models import GenericMessage
-from models import UserResource
 from models import GameResource
-from models import NewGameResource
+from models import GamesByUserResource
 
-from utils import get_by_urlsafe
+from utils import get_by_urlsafe, getRank
 
-USER_REQUEST = endpoints.ResourceContainer(UserResource)
-NEW_GAME_REQUEST = endpoints.ResourceContainer(NewGameResource)
+USER_REQUEST = endpoints.ResourceContainer(
+    user_name = messages.StringField(1),
+    email = messages.StringField(2))
+NEW_GAME_REQUEST = endpoints.ResourceContainer(
+    user_name = messages.StringField(1))
 GET_GAME_REQUEST = endpoints.ResourceContainer(
-    urlsafe_game_key=messages.StringField(1))
+    urlsafe_game_key = messages.StringField(1))
 CANCEL_GAME_REQUEST = endpoints.ResourceContainer(
-    urlsafe_game_key=messages.StringField(1))
+    urlsafe_game_key = messages.StringField(1))
 
 
 @endpoints.api(name='war', version='v1')
 class WarApi(remote.Service):
     """War API"""
+
     @endpoints.method(request_message=USER_REQUEST,
                       response_message=GenericMessage,
                       path='user',
@@ -76,11 +79,29 @@ class WarApi(remote.Service):
         else:
             raise endpoints.NotFoundException('Game not found!')
 
+    @endpoints.method(request_message=NEW_GAME_REQUEST,
+                      response_message=GameResource,
+                      path='game',
+                      name='new_game',
+                      http_method='POST')
+    def new_game(self, request):
+        """Creates new game"""
+        user = User.query(User.name == request.user_name).get()
+        if not user:
+            raise endpoints.NotFoundException('User does not exist!')
+
+        try:
+            game = Game.new_game(user.key)
+        except ValueError:
+            raise endpoints.BadRequestException('Error creating new game.')
+
+        return game.to_form('Good luck playing the game of War!')
+
     @endpoints.method(request_message=CANCEL_GAME_REQUEST,
                       response_message=GenericMessage,
-                      path='game/{urlsafe_game_key}/cancel',
+                      path='game/{urlsafe_game_key}',
                       name='cancel_game',
-                      http_method='POST')
+                      http_method='DELETE')
     def cancel_game(self, request):
         """Cancels (deletes from datastore) an active game."""
         game = get_by_urlsafe(request.urlsafe_game_key, Game)

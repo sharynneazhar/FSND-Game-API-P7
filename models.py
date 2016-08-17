@@ -50,17 +50,12 @@ class Game(ndb.Model):
 
 
 class GenericMessage(messages.Message):
-    """GenericMessage-- outbound (single) string message"""
+    """Generic string message"""
     message = messages.StringField(1, required=True)
 
 
-class UserResource(messages.Message):
-    user_name = messages.StringField(1, required=True)
-    email = messages.StringField(2)
-
-
 class GameResource(messages.Message):
-    """Game form for outbound api response data"""
+    """Returns game information"""
     urlsafe_key = messages.StringField(1, required=True)
     user_name = messages.StringField(2, required=True)
     user_deck = messages.StringField(3, repeated=True)
@@ -69,6 +64,7 @@ class GameResource(messages.Message):
     game_over = messages.BooleanField(6, required=True)
 
 
-class NewGameResource(messages.Message):
-    """Used to create a new game"""
+class GamesByUserResource(messages.Message):
+    """Returns a list of games in play"""
     user_name = messages.StringField(1, required=True)
+    games = messages.StringField(2, repeated=True)
