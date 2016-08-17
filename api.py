@@ -28,6 +28,8 @@ GET_GAME_REQUEST = endpoints.ResourceContainer(
     urlsafe_game_key = messages.StringField(1))
 CANCEL_GAME_REQUEST = endpoints.ResourceContainer(
     urlsafe_game_key = messages.StringField(1))
+CURRENT_GAMES_REQUEST = endpoints.ResourceContainer(
+    user_name = messages.StringField(1))
 
 
 @endpoints.api(name='war', version='v1')
@@ -48,23 +50,20 @@ class WarApi(remote.Service):
         return GenericMessage(message='User {} created!'\
             .format(request.user_name))
 
-    @endpoints.method(request_message=NEW_GAME_REQUEST,
-                      response_message=GameResource,
-                      path='game',
-                      name='new_game',
-                      http_method='POST')
-    def new_game(self, request):
-        """Creates new game"""
+    @endpoints.method(request_message=CURRENT_GAMES_REQUEST,
+                      response_message=GenericMessage,
+                      path='user/getActiveGames',
+                      name='get_user_games',
+                      http_method='GET')
+    def get_user_games(self, request):
+        """Returns all of a user's active games"""
         user = User.query(User.name == request.user_name).get()
+
         if not user:
             raise endpoints.NotFoundException('User does not exist!')
 
-        try:
-            game = Game.new_game(user.key)
-        except ValueError:
-            raise endpoints.BadRequestException('Error creating new game.')
-
-        return game.to_form('Good luck playing the game of War!')
+        game = Game.query(Game.user == user.key)
+        return GenericMessage(message='get')
 
     @endpoints.method(request_message=GET_GAME_REQUEST,
                       response_message=GameResource,
@@ -112,8 +111,6 @@ class WarApi(remote.Service):
             raise endpoints.NotFoundException('Game not found!')
 
 
-    ## TODO add ability to retrieve a particular user's active games
-    ## get_user_games
 
     ## TODO add battle endpoint method
 
