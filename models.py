@@ -12,6 +12,7 @@ class User(ndb.Model):
     """User profile"""
     name = ndb.StringProperty(required=True)
     email = ndb.StringProperty()
+    wins = ndb.IntegerProperty(default=0)
 
 
 class Game(ndb.Model):
@@ -25,7 +26,7 @@ class Game(ndb.Model):
     def new_game(cls, user):
         """Creates and returns a new game"""
         # Generate card deck and shuffle
-        deck = ['2','3','4','5','6','7','8','9','10','J','Q','K','A'] * 2
+        deck = ['2','2','2','2','2','2','2','2','10','J','Q','K','A'] * 2
         random.shuffle(deck)
         deck1 = deck[0:13]
         deck2 = deck[13:26]
@@ -43,12 +44,18 @@ class Game(ndb.Model):
         form.urlsafe_key = self.key.urlsafe()
         form.user_name = self.user.get().name
         form.game_over = self.game_over
+        form.user_card_count = len(self.user_deck)
+        form.bot_card_count = len(self.bot_deck)
         form.message = message
         return form
 
     def end_game(self, won=False):
         """Ends the game -- if won is True, the player won;
         if won is False, the player lost"""
+        user = User.query(User.name == self.user.get().name).get()
+        if won:
+            user.wins += 1
+            user.put()
         self.game_over = True
         self.put()
 
@@ -62,6 +69,8 @@ class GameResource(messages.Message):
     """Returns game information"""
     urlsafe_key = messages.StringField(1, required=True)
     user_name = messages.StringField(2, required=True)
+    user_card_count = messages.IntegerField(3, default=0)
+    bot_card_count = messages.IntegerField(4, default=0)
     message = messages.StringField(5, required=True)
     game_over = messages.BooleanField(6, required=True)
 
