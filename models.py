@@ -14,7 +14,6 @@ class User(ndb.Model):
     email = ndb.StringProperty()
     wins = ndb.IntegerProperty(default=0)
 
-
 class Game(ndb.Model):
     """Game object"""
     user = ndb.KeyProperty(required=True, kind='User')
@@ -59,11 +58,19 @@ class Game(ndb.Model):
         self.game_over = True
         self.put()
 
-
 class GenericMessage(messages.Message):
     """Generic string message"""
     message = messages.StringField(1, required=True)
 
+class UserStats(messages.Message):
+    """Object to store a User's game stats"""
+    user_name = messages.StringField(1)
+    wins = messages.IntegerField(2)
+
+class UserRankingMessage(messages.Message):
+    """Returns a list of users ordered by number of wins"""
+    message = messages.StringField(1, required=True)
+    rankings = messages.MessageField(UserStats, 2, repeated=True)
 
 class GameResource(messages.Message):
     """Returns game information"""
@@ -73,7 +80,6 @@ class GameResource(messages.Message):
     bot_card_count = messages.IntegerField(4, default=0)
     message = messages.StringField(5, required=True)
     game_over = messages.BooleanField(6, required=True)
-
 
 class GamesByUserResource(messages.Message):
     """Returns a list of games in play"""

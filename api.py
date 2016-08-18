@@ -11,9 +11,9 @@ from protorpc import remote, messages
 from google.appengine.api import memcache
 from google.appengine.api import taskqueue
 
-from models import User, Game
-
+from models import User, Game, UserStats
 from models import GenericMessage
+from models import UserRankingMessage
 from models import GameResource
 from models import GamesByUserResource
 
@@ -131,7 +131,7 @@ class WarApi(remote.Service):
         """Return the current game state."""
         game = get_by_urlsafe(request.urlsafe_game_key, Game)
         if game:
-            return game.to_form('Aw snap, the game is getting intense')
+            return game.to_form('Game successfully returned')
         else:
             raise endpoints.NotFoundException('Game not found!')
 
@@ -214,10 +214,20 @@ class WarApi(remote.Service):
             game.put()
             return game.to_form(msg)
 
-        
 
-    ## TODO add ability to track user rankings by win/loss
-    ## get_user_rankings
+    @endpoints.method(response_message=UserRankingMessage,
+                      path='user_rankings',
+                      name='get_user_rankings',
+                      http_method='GET')
+    def get_user_rankings(self, request):
+        """Returns a list of users ordered by number of wins."""
+        rankings = []
+        users = User.query().order(-User.wins)
+        for user in users:
+            stats = UserStats(user_name=user.name, wins=user.wins)
+            rankings.append(stats)
+        return UserRankingMessage(message='Success', rankings=rankings)
+
 
     ## TODO add ability to track a game history
     ## get_game_history
