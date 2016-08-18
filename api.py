@@ -17,7 +17,7 @@ from models import GenericMessage
 from models import GameResource
 from models import GamesByUserResource
 
-from utils import get_by_urlsafe, getRank
+from utils import get_by_urlsafe
 
 USER_REQUEST = endpoints.ResourceContainer(
     user_name = messages.StringField(1),
@@ -37,6 +37,48 @@ BATTLE_REQUEST = endpoints.ResourceContainer(
 @endpoints.api(name='war', version='v1')
 class WarApi(remote.Service):
     """War API"""
+
+    def _getRank(self, cardValue):
+        """Return the numeric value of a card -- important for face cards"""
+        return { '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8, '9': 9,
+            '10': 10, 'J': 11, 'Q': 12, 'K': 13, 'A': 14 }[cardValue]
+
+
+    def _handleWarRound(self, user_card, bot_card, game, card_stack=[]):
+        """War -- played when the cards have equal value."""
+        if (len(game.user_deck) < 2):
+            user_skip_card = game.user_deck.pop(0);
+            user_war_card = game.user_deck.pop(0);
+        else:
+            msg = 'The bot won the war... '
+            game.end_game(False)
+            return [game, msg]
+
+        if (len(game.bot_deck) < 2):
+            bot_skip_card = game.bot_deck.pop(0);
+            bot_war_card = game.bot_deck.pop(0);
+        else:
+            msg = 'You win the war! '
+            game.end_game(True)
+            return [game, msg]
+
+        if (self._getRank(user_war_card) > self._getRank(bot_war_card)):
+            msg = 'You win the war! '
+            game.user_deck.extend([user_card, bot_card, user_skip_card,
+                bot_skip_card, user_war_card, bot_war_card] + card_stack)
+            return [game, msg]
+        elif (self._getRank(user_war_card) < self._getRank(bot_war_card)):
+            msg = 'The bot won the war... '
+            game.bot_deck.extend([user_card, bot_card, user_skip_card,
+                bot_skip_card, user_war_card, bot_war_card] + card_stack)
+            return [game, msg]
+        else:
+            stack = [user_card, bot_card, user_skip_card,
+                bot_skip_card, user_war_card, bot_war_card]
+            results = self._handleWarRound(user_war_card, bot_war_card,
+                game, stack)
+            return results
+
 
     @endpoints.method(request_message=USER_REQUEST,
                       response_message=GenericMessage,
@@ -125,6 +167,7 @@ class WarApi(remote.Service):
         else:
             raise endpoints.NotFoundException('Game not found!')
 
+
     @endpoints.method(request_message=BATTLE_REQUEST,
                       response_message=GameResource,
                       path='game/{urlsafe_game_key}/battle',
@@ -133,35 +176,39 @@ class WarApi(remote.Service):
     def battle(self, request):
         """Battle -- reveal top card from deck. Returns the game state"""
         game = get_by_urlsafe(request.urlsafe_game_key, Game)
-
         if game.game_over:
             return game.to_form('Game already over')
 
+        # Get the first card from each player's deck
         user_card = game.user_deck.pop(0)
         bot_card = game.bot_deck.pop(0)
-        result = 'Bot: ' + bot_card + '; You: ' + user_card + ' '
 
-        if (getRank(user_card) > getRank(bot_card)):
+        # Get the integer value of the card
+        user_card_value = self._getRank(user_card)
+        bot_card_value = self._getRank(bot_card)
+
+        # Analyze battle
+        if (user_card_value > bot_card_value):
+            msg = 'You win this round! '
             game.user_deck.extend([user_card, bot_card])
-            msg = 'You win this round!'
-        elif (getRank(user_card) < getRank(bot_card)):
+        elif (user_card_value < bot_card_value):
+            msg = 'The bot won this time... '
             game.bot_deck.extend([user_card, bot_card])
-            msg = 'The bot won this time...'
         else:
-            ## TODO start war round
-            msg = 'It\'s a tie!'
+            results = self._handleWarRound(user_card, bot_card, game)
+            user_deck = results[0].user_deck
+            bot_deck = results[0].bot_deck
+            msg = results[1]
 
-        if len(game.user_deck) == 52:
-            game.end_game(True)
-            return game.to_form(result + msg + ' Game over!')
-        elif len(game.bot_deck) == 52:
+        if not game.user_deck:
             game.end_game(False)
-            return game.to_form(result + msg + ' Game over!')
+            return game.to_form('You lose. Game over!')
+        elif not game.bot_deck:
+            game.end_game(True)
+            return game.to_form('You win. Game over!')
         else:
             game.put()
-            return game.to_form(result + msg)
-
-
+            return game.to_form(msg)
 
 
     ## TODO add war endpoint method

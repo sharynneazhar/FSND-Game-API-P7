@@ -42,8 +42,6 @@ class Game(ndb.Model):
         form = GameResource()
         form.urlsafe_key = self.key.urlsafe()
         form.user_name = self.user.get().name
-        form.user_deck = self.user_deck
-        form.bot_deck = self.bot_deck
         form.game_over = self.game_over
         form.message = message
         return form
@@ -64,8 +62,6 @@ class GameResource(messages.Message):
     """Returns game information"""
     urlsafe_key = messages.StringField(1, required=True)
     user_name = messages.StringField(2, required=True)
-    user_deck = messages.StringField(3, repeated=True)
-    bot_deck = messages.StringField(4, repeated=True)
     message = messages.StringField(5, required=True)
     game_over = messages.BooleanField(6, required=True)
 
