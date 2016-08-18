@@ -157,13 +157,15 @@ class WarApi(remote.Service):
 
     @endpoints.method(request_message=CANCEL_GAME_REQUEST,
                       response_message=GenericMessage,
-                      path='game/{urlsafe_game_key}',
+                      path='game/{urlsafe_game_key}/cancel',
                       name='cancel_game',
-                      http_method='DELETE')
+                      http_method='PUT')
     def cancel_game(self, request):
-        """Cancels (deletes from datastore) an active game."""
+        """Cancels an active game."""
         game = get_by_urlsafe(request.urlsafe_game_key, Game)
         if game:
+            if game.game_over:
+                return GenericMessage(message="Game already completed")
             game.key.delete()
             return GenericMessage(message='Game was canceled')
         else:
@@ -212,10 +214,7 @@ class WarApi(remote.Service):
             game.put()
             return game.to_form(msg)
 
-
-    ## TODO add war endpoint method
-
-    ## TODO manage card stacks
+        
 
     ## TODO add ability to track user rankings by win/loss
     ## get_user_rankings
