@@ -52,20 +52,31 @@ class WarApi(remote.Service):
         return GenericMessage(message='User {} created!'\
             .format(request.user_name))
 
+
     @endpoints.method(request_message=CURRENT_GAMES_REQUEST,
-                      response_message=GenericMessage,
+                      response_message=GamesByUserResource,
                       path='user/getActiveGames',
                       name='get_user_games',
                       http_method='GET')
     def get_user_games(self, request):
-        """Returns all of a user's active games"""
+        """Returns all of a user's active and inactive (done) games"""
         user = User.query(User.name == request.user_name).get()
-
         if not user:
             raise endpoints.NotFoundException('User does not exist!')
 
-        game = Game.query(Game.user == user.key)
-        return GenericMessage(message='get')
+        games = Game.query(Game.user == user.key).fetch()
+        activeGames = []
+        inactiveGames = []
+        for game in games:
+            if (game.game_over == False):
+                activeGames.append(game.key.id())
+            else:
+                inactiveGames.append(game.key.id())
+
+        return GamesByUserResource(user_name=request.user_name,
+                                   activeGameIds=activeGames,
+                                   inactiveGameIds=inactiveGames)
+
 
     @endpoints.method(request_message=GET_GAME_REQUEST,
                       response_message=GameResource,
@@ -79,6 +90,7 @@ class WarApi(remote.Service):
             return game.to_form('Aw snap, the game is getting intense')
         else:
             raise endpoints.NotFoundException('Game not found!')
+
 
     @endpoints.method(request_message=NEW_GAME_REQUEST,
                       response_message=GameResource,
@@ -97,6 +109,7 @@ class WarApi(remote.Service):
             raise endpoints.BadRequestException('Error creating new game.')
 
         return game.to_form('Good luck playing the game of War!')
+
 
     @endpoints.method(request_message=CANCEL_GAME_REQUEST,
                       response_message=GenericMessage,

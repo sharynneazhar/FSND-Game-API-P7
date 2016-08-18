@@ -73,4 +73,5 @@ class GameResource(messages.Message):
 class GamesByUserResource(messages.Message):
     """Returns a list of games in play"""
     user_name = messages.StringField(1, required=True)
-    games = messages.StringField(2, repeated=True)
+    activeGameIds = messages.IntegerField(2, repeated=True)
+    inactiveGameIds = messages.IntegerField(3, repeated=True)
