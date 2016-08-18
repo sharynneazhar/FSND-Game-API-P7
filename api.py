@@ -47,27 +47,29 @@ class WarApi(remote.Service):
     def _handleWarRound(self, user_card, bot_card, game, card_stack=[]):
         """War -- played when the cards have equal value."""
         if (len(game.user_deck) < 2):
-            user_skip_card = game.user_deck.pop(0);
-            user_war_card = game.user_deck.pop(0);
-        else:
             msg = 'The bot won the war... '
             game.end_game(False)
             return [game, msg]
+        else:
+            user_skip_card = game.user_deck.pop(0);
+            user_war_card = game.user_deck.pop(0);
+            user_war_card_value = self._getRank(user_war_card)
 
         if (len(game.bot_deck) < 2):
-            bot_skip_card = game.bot_deck.pop(0);
-            bot_war_card = game.bot_deck.pop(0);
-        else:
             msg = 'You win the war! '
             game.end_game(True)
             return [game, msg]
+        else:
+            bot_skip_card = game.bot_deck.pop(0);
+            bot_war_card = game.bot_deck.pop(0);
+            bot_war_card_value = self._getRank(bot_war_card)
 
-        if (self._getRank(user_war_card) > self._getRank(bot_war_card)):
+        if (user_war_card_value > bot_war_card_value):
             msg = 'You win the war! '
             game.user_deck.extend([user_card, bot_card, user_skip_card,
                 bot_skip_card, user_war_card, bot_war_card] + card_stack)
             return [game, msg]
-        elif (self._getRank(user_war_card) < self._getRank(bot_war_card)):
+        elif (user_war_card_value < bot_war_card_value):
             msg = 'The bot won the war... '
             game.bot_deck.extend([user_card, bot_card, user_skip_card,
                 bot_skip_card, user_war_card, bot_war_card] + card_stack)
