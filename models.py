@@ -24,22 +24,19 @@ class Game(ndb.Model):
     @classmethod
     def new_game(cls, user):
         """Creates and returns a new game"""
-        # Generate card deck and shuffle
+        # Generate card deck and shuffle - 26 cards to keep the game short
         deck = ['2','3','4','5','6','7','8','9','10','J','Q','K','A'] * 2
         random.shuffle(deck)
         deck1 = deck[0:13]
         deck2 = deck[13:26]
-
-        game = Game(user=user,
-                    user_deck=deck1,
-                    bot_deck=deck2,
-                    game_over=False)
+        game = Game(user=user, user_deck=deck1,
+            bot_deck=deck2, game_over=False)
         game.put()
         return game
 
     def to_form(self, message):
         """Returns the response data of the game object"""
-        form = GameResource()
+        form = GameResponse()
         form.urlsafe_key = self.key.urlsafe()
         form.user_name = self.user.get().name
         form.game_over = self.game_over
@@ -62,17 +59,7 @@ class GenericMessage(messages.Message):
     """Generic string message"""
     message = messages.StringField(1, required=True)
 
-class UserStats(messages.Message):
-    """Object to store a User's game stats"""
-    user_name = messages.StringField(1)
-    wins = messages.IntegerField(2)
-
-class UserRankingMessage(messages.Message):
-    """Returns a list of users ordered by number of wins"""
-    message = messages.StringField(1, required=True)
-    rankings = messages.MessageField(UserStats, 2, repeated=True)
-
-class GameResource(messages.Message):
+class GameResponse(messages.Message):
     """Returns game information"""
     urlsafe_key = messages.StringField(1, required=True)
     user_name = messages.StringField(2, required=True)
@@ -81,8 +68,18 @@ class GameResource(messages.Message):
     message = messages.StringField(5, required=True)
     game_over = messages.BooleanField(6, required=True)
 
-class GamesByUserResource(messages.Message):
+class UserGameResponse(messages.Message):
     """Returns a list of games in play"""
     user_name = messages.StringField(1, required=True)
     activeGameIds = messages.IntegerField(2, repeated=True)
     inactiveGameIds = messages.IntegerField(3, repeated=True)
+
+class UserStats(messages.Message):
+    """Object to store a User's game stats"""
+    user_name = messages.StringField(1)
+    wins = messages.IntegerField(2)
+
+class UserRankingResponse(messages.Message):
+    """Returns a list of users ordered by number of wins"""
+    message = messages.StringField(1, required=True)
+    rankings = messages.MessageField(UserStats, 2, repeated=True)

@@ -11,11 +11,13 @@ from protorpc import remote, messages
 from google.appengine.api import memcache
 from google.appengine.api import taskqueue
 
-from models import User, Game, UserStats
+from models import User
+from models import Game
 from models import GenericMessage
-from models import UserRankingMessage
-from models import GameResource
-from models import GamesByUserResource
+from models import GameResponse
+from models import UserGameResponse
+from models import UserStats
+from models import UserRankingResponse
 
 from utils import get_by_urlsafe
 
@@ -38,14 +40,16 @@ BATTLE_REQUEST = endpoints.ResourceContainer(
 class WarApi(remote.Service):
     """War API"""
 
-    def _getRank(self, cardValue):
-        """Return the numeric value of a card -- important for face cards"""
+    def _getRank(self, card):
+        """Returns the numeric representation of a given card"""
         return { '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8, '9': 9,
-            '10': 10, 'J': 11, 'Q': 12, 'K': 13, 'A': 14 }[cardValue]
+            '10': 10, 'J': 11, 'Q': 12, 'K': 13, 'A': 14 }[card]
 
 
-    def _handleWarRound(self, user_card, bot_card, game, card_stack=[]):
-        """War -- played when the cards have equal value."""
+    def _handleWarRound(self, user_card, bot_card, game, pool=[]):
+        """Handles the round of war when players are tied. Returns
+        the game object a long with a response message. Pool is the
+        list of cards that the winner will collect"""
         if (len(game.user_deck) < 2):
             msg = 'The bot won the war... '
             game.end_game(False)
@@ -64,42 +68,39 @@ class WarApi(remote.Service):
             bot_war_card = game.bot_deck.pop(0);
             bot_war_card_value = self._getRank(bot_war_card)
 
+        # add cards to the pool
+        pool.extend([user_card, bot_card, user_skip_card,
+            bot_skip_card, user_war_card, bot_war_card])
+
         if (user_war_card_value > bot_war_card_value):
-            msg = 'You win the war! '
-            game.user_deck.extend([user_card, bot_card, user_skip_card,
-                bot_skip_card, user_war_card, bot_war_card] + card_stack)
-            return [game, msg]
+            game.user_deck.extend(pool)
+            return [game, 'You win the war! ']
         elif (user_war_card_value < bot_war_card_value):
-            msg = 'The bot won the war... '
-            game.bot_deck.extend([user_card, bot_card, user_skip_card,
-                bot_skip_card, user_war_card, bot_war_card] + card_stack)
-            return [game, msg]
+            game.bot_deck.extend(pool)
+            return [game, 'The bot won the war! ']
         else:
-            stack = [user_card, bot_card, user_skip_card,
-                bot_skip_card, user_war_card, bot_war_card]
             results = self._handleWarRound(user_war_card, bot_war_card,
-                game, stack)
+                game, pool)
             return results
 
 
     @endpoints.method(request_message=USER_REQUEST,
                       response_message=GenericMessage,
-                      path='user',
+                      path='user/new',
                       name='create_user',
                       http_method='POST')
     def create_user(self, request):
         """Create a User. Requires a unique username"""
         if User.query(User.name == request.user_name).get():
             raise endpoints.ConflictException('User already exists!')
-        user = User(name=request.user_name, email=request.email)
-        user.put()
+        User(name=request.user_name, email=request.email).put()
         return GenericMessage(message='User {} created!'\
             .format(request.user_name))
 
 
     @endpoints.method(request_message=CURRENT_GAMES_REQUEST,
-                      response_message=GamesByUserResource,
-                      path='user/getActiveGames',
+                      response_message=UserGameResponse,
+                      path='user/games',
                       name='get_user_games',
                       http_method='GET')
     def get_user_games(self, request):
@@ -117,13 +118,13 @@ class WarApi(remote.Service):
             else:
                 inactiveGames.append(game.key.id())
 
-        return GamesByUserResource(user_name=request.user_name,
-                                   activeGameIds=activeGames,
-                                   inactiveGameIds=inactiveGames)
+        return UserGameResponse(user_name=request.user_name,
+                                activeGameIds=activeGames,
+                                inactiveGameIds=inactiveGames)
 
 
     @endpoints.method(request_message=GET_GAME_REQUEST,
-                      response_message=GameResource,
+                      response_message=GameResponse,
                       path='game/{urlsafe_game_key}',
                       name='get_game',
                       http_method='GET')
@@ -131,13 +132,13 @@ class WarApi(remote.Service):
         """Return the current game state."""
         game = get_by_urlsafe(request.urlsafe_game_key, Game)
         if game:
-            return game.to_form('Game successfully returned')
+            return game.to_form('Success')
         else:
             raise endpoints.NotFoundException('Game not found!')
 
 
     @endpoints.method(request_message=NEW_GAME_REQUEST,
-                      response_message=GameResource,
+                      response_message=GameResponse,
                       path='game',
                       name='new_game',
                       http_method='POST')
@@ -152,7 +153,7 @@ class WarApi(remote.Service):
         except ValueError:
             raise endpoints.BadRequestException('Error creating new game.')
 
-        return game.to_form('Good luck playing the game of War!')
+        return game.to_form('Successfully created a new game!')
 
 
     @endpoints.method(request_message=CANCEL_GAME_REQUEST,
@@ -165,7 +166,7 @@ class WarApi(remote.Service):
         game = get_by_urlsafe(request.urlsafe_game_key, Game)
         if game:
             if game.game_over:
-                return GenericMessage(message="Game already completed")
+                return GenericMessage(message="Game already over")
             game.key.delete()
             return GenericMessage(message='Game was canceled')
         else:
@@ -173,7 +174,7 @@ class WarApi(remote.Service):
 
 
     @endpoints.method(request_message=BATTLE_REQUEST,
-                      response_message=GameResource,
+                      response_message=GameResponse,
                       path='game/{urlsafe_game_key}/battle',
                       name='battle',
                       http_method='PUT')
@@ -215,7 +216,7 @@ class WarApi(remote.Service):
             return game.to_form(msg)
 
 
-    @endpoints.method(response_message=UserRankingMessage,
+    @endpoints.method(response_message=UserRankingResponse,
                       path='user_rankings',
                       name='get_user_rankings',
                       http_method='GET')
@@ -226,7 +227,7 @@ class WarApi(remote.Service):
         for user in users:
             stats = UserStats(user_name=user.name, wins=user.wins)
             rankings.append(stats)
-        return UserRankingMessage(message='Success', rankings=rankings)
+        return UserRankingResponse(message='Success', rankings=rankings)
 
 
     ## TODO add ability to track a game history
