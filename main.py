@@ -6,9 +6,9 @@ import logging
 
 import webapp2
 from google.appengine.api import mail, app_identity
-from api import GuessANumberApi
+from api import WarApi
 
-from models import User
+from models import User, Game
 
 
 class SendReminderEmail(webapp2.RequestHandler):
@@ -17,15 +17,19 @@ class SendReminderEmail(webapp2.RequestHandler):
         Called every hour using a cron job"""
         app_id = app_identity.get_application_id()
         users = User.query(User.email != None)
+
         for user in users:
-            subject = 'This is a reminder!'
-            body = 'Hello {}, try out War!'.format(user.name)
-            # This will send test emails, the arguments to send_mail are:
-            # from, to, subject, body
-            mail.send_mail('noreply@{}.appspotmail.com'.format(app_id),
-                           user.email,
-                           subject,
-                           body)
+            games = Game.query(Game.user == user.key).fetch()
+            for game in games:
+                if (game.game_over == False):
+                    subject = 'This is a reminder!'
+                    body = 'Hey {}, the battle isn\'t over!'.format(user.name)
+                    # This sends test emails, the arguments to send_mail are:
+                    # from, to, subject, body
+                    mail.send_mail('noreply@{}.appspotmail.com'.format(app_id),
+                                   user.email,
+                                   subject,
+                                   body)
 
 
 class UpdateAverageMovesRemaining(webapp2.RequestHandler):
