@@ -3,9 +3,12 @@ entities used by the Game. Because these classes are also regular Python
 classes they can include methods (such as 'to_form' and 'new_game')."""
 
 import random
-from datetime import date
-from protorpc import messages
+
 from google.appengine.ext import ndb
+from google.appengine.ext.ndb import msgprop
+
+from forms import GameForm
+from forms import GameRoundForm
 
 
 class User(ndb.Model):
@@ -14,18 +17,20 @@ class User(ndb.Model):
     email = ndb.StringProperty()
     wins = ndb.IntegerProperty(default=0)
 
+
 class Game(ndb.Model):
     """Game object"""
     user = ndb.KeyProperty(required=True, kind='User')
     user_deck = ndb.StringProperty(repeated=True)
     bot_deck = ndb.StringProperty(repeated=True)
     game_over = ndb.BooleanProperty(required=True, default=False)
+    history = msgprop.MessageProperty(GameRoundForm, repeated=True)
 
     @classmethod
     def new_game(cls, user):
         """Creates and returns a new game"""
         # Generate card deck and shuffle - 26 cards to keep the game short
-        deck = ['2','3','4','5','6','7','8','9','10','J','Q','K','A'] * 2
+        deck = ['2','2','2','2','2','2','2','2','2','2','Q','K','A'] * 2
         random.shuffle(deck)
         deck1 = deck[0:13]
         deck2 = deck[13:26]
@@ -36,7 +41,7 @@ class Game(ndb.Model):
 
     def to_form(self, message):
         """Returns the response data of the game object"""
-        form = GameResponse()
+        form = GameForm()
         form.urlsafe_key = self.key.urlsafe()
         form.user_name = self.user.get().name
         form.game_over = self.game_over
@@ -54,32 +59,3 @@ class Game(ndb.Model):
             user.put()
         self.game_over = True
         self.put()
-
-class GenericMessage(messages.Message):
-    """Generic string message"""
-    message = messages.StringField(1, required=True)
-
-class GameResponse(messages.Message):
-    """Returns game information"""
-    urlsafe_key = messages.StringField(1, required=True)
-    user_name = messages.StringField(2, required=True)
-    user_card_count = messages.IntegerField(3, default=0)
-    bot_card_count = messages.IntegerField(4, default=0)
-    message = messages.StringField(5, required=True)
-    game_over = messages.BooleanField(6, required=True)
-
-class UserGameResponse(messages.Message):
-    """Returns a list of games in play"""
-    user_name = messages.StringField(1, required=True)
-    activeGameIds = messages.IntegerField(2, repeated=True)
-    inactiveGameIds = messages.IntegerField(3, repeated=True)
-
-class UserStats(messages.Message):
-    """Object to store a User's game stats"""
-    user_name = messages.StringField(1)
-    wins = messages.IntegerField(2)
-
-class UserRankingResponse(messages.Message):
-    """Returns a list of users ordered by number of wins"""
-    message = messages.StringField(1, required=True)
-    rankings = messages.MessageField(UserStats, 2, repeated=True)
