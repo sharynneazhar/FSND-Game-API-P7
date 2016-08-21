@@ -141,16 +141,16 @@ class WarApi(remote.Service):
 
     def _getRank(self, card):
         """Returns the numeric representation of a given card"""
-        return { '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8, '9': 9,
-            '10': 10, 'J': 11, 'Q': 12, 'K': 13, 'A': 14 }[card]
+        return { '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8,
+            '9': 9, '10': 10, 'J': 11, 'Q': 12, 'K': 13, 'A': 14 }[card]
 
 
-    def _handleBattleRound(self, game, war_card_pool=[]):
+    def _handleBattleRound(self,
+                           game,
+                           user_card='',
+                           bot_card='',
+                           war_card_pool=[]):
         """Handles the battle round"""
-        user_card = ''
-        bot_card = ''
-        result = ''
-
         if game.user_deck and game.bot_deck: # not empty
             # Get the first card from each player's deck
             user_card = game.user_deck.pop(0)
@@ -171,10 +171,34 @@ class WarApi(remote.Service):
             else:
                 result = 'It\'s a war'
                 war_card_pool.extend([user_card] + [bot_card])
-                if game.user_deck and game.bot_deck:
+
+                if game.user_deck:
                     war_card_pool.extend([game.user_deck.pop(0)])
+                else:
+                    result = 'Game over. Bot won'
+                    game.bot_deck.extend(war_card_pool)
+                    roundInfo = GameRoundForm(user_card=user_card,
+                                              bot_card=bot_card,
+                                              result=result)
+                    game.history.append(roundInfo)
+                    game.put()
+                    game.end_game(False)
+                    return result
+
+                if game.bot_deck:
                     war_card_pool.extend([game.bot_deck.pop(0)])
-                self._handleBattleRound(game, war_card_pool)
+                else:
+                    result = 'Game over. Player won'
+                    game.user_deck.extend(war_card_pool)
+                    roundInfo = GameRoundForm(user_card=user_card,
+                                              bot_card=bot_card,
+                                              result=result)
+                    game.history.append(roundInfo)
+                    game.put()
+                    game.end_game(True)
+                    return result
+
+                self._handleBattleRound(game, war_card_pool=war_card_pool)
 
             roundInfo = GameRoundForm(user_card=user_card,
                                       bot_card=bot_card,
@@ -188,6 +212,7 @@ class WarApi(remote.Service):
                                       bot_card=bot_card,
                                       result=result)
             game.history.append(roundInfo)
+            game.put()
             game.end_game(False)
         elif not game.bot_deck:
             result = 'Game over. Player won'
@@ -195,6 +220,7 @@ class WarApi(remote.Service):
                                       bot_card=bot_card,
                                       result=result)
             game.history.append(roundInfo)
+            game.put()
             game.end_game(True)
 
         return result
@@ -210,8 +236,8 @@ class WarApi(remote.Service):
         game = get_by_urlsafe(request.urlsafe_game_key, Game)
         if game.game_over:
             return game.to_form('Game already over')
-        results = self._handleBattleRound(game)
-        return game.to_form(results)
+        result = self._handleBattleRound(game)
+        return game.to_form(result)
 
 
     @endpoints.method(response_message=UserRankingForm,
