@@ -21,7 +21,7 @@ class UserGameForm(messages.Message):
     """Returns a list of games in play"""
     user_name = messages.StringField(1, required=True)
     activeGameIds = messages.IntegerField(2, repeated=True)
-    inactiveGameIds = messages.IntegerField(3, repeated=True)
+    completedGameIds = messages.IntegerField(3, repeated=True)
 
 
 class UserStatsForm(messages.Message):

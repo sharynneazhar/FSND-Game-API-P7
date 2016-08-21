@@ -1,25 +1,27 @@
 # -*- coding: utf-8 -*-`
-"""api.py - Create and configure the Game API exposing the resources.
-This can also contain game logic. For more complex games it would be wise to
-move game logic to another file. Ideally the API will be simple, concerned
-primarily with communication to/from the API's users."""
+"""api.py"""
 
 import random
 import logging
 import endpoints
+
 from protorpc import remote, messages
 from google.appengine.api import memcache
 from google.appengine.api import taskqueue
 
 from models import User
 from models import Game
-from models import GenericMessage
-from models import GameResponse
-from models import UserGameResponse
-from models import UserStats
-from models import UserRankingResponse
+
+from forms import GenericForm
+from forms import GameForm
+from forms import UserGameForm
+from forms import UserStatsForm
+from forms import UserRankingForm
+from forms import GameRoundForm
+from forms import GameHistoryForm
 
 from utils import get_by_urlsafe
+
 
 USER_REQUEST = endpoints.ResourceContainer(
     user_name = messages.StringField(1),
@@ -40,105 +42,43 @@ BATTLE_REQUEST = endpoints.ResourceContainer(
 class WarApi(remote.Service):
     """War API"""
 
-    def _getRank(self, card):
-        """Returns the numeric representation of a given card"""
-        return { '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8, '9': 9,
-            '10': 10, 'J': 11, 'Q': 12, 'K': 13, 'A': 14 }[card]
-
-
-    def _handleWarRound(self, user_card, bot_card, game, pool=[]):
-        """Handles the round of war when players are tied. Returns
-        the game object a long with a response message. Pool is the
-        list of cards that the winner will collect"""
-        if (len(game.user_deck) < 2):
-            msg = 'The bot won the war... '
-            game.end_game(False)
-            return [game, msg]
-        else:
-            user_skip_card = game.user_deck.pop(0);
-            user_war_card = game.user_deck.pop(0);
-            user_war_card_value = self._getRank(user_war_card)
-
-        if (len(game.bot_deck) < 2):
-            msg = 'You win the war! '
-            game.end_game(True)
-            return [game, msg]
-        else:
-            bot_skip_card = game.bot_deck.pop(0);
-            bot_war_card = game.bot_deck.pop(0);
-            bot_war_card_value = self._getRank(bot_war_card)
-
-        # add cards to the pool
-        pool.extend([user_card, bot_card, user_skip_card,
-            bot_skip_card, user_war_card, bot_war_card])
-
-        if (user_war_card_value > bot_war_card_value):
-            game.user_deck.extend(pool)
-            return [game, 'You win the war! ']
-        elif (user_war_card_value < bot_war_card_value):
-            game.bot_deck.extend(pool)
-            return [game, 'The bot won the war! ']
-        else:
-            results = self._handleWarRound(user_war_card, bot_war_card,
-                game, pool)
-            return results
-
-
     @endpoints.method(request_message=USER_REQUEST,
-                      response_message=GenericMessage,
+                      response_message=GenericForm,
                       path='user/new',
                       name='create_user',
                       http_method='POST')
     def create_user(self, request):
-        """Create a User. Requires a unique username"""
+        """Creates a new User"""
         if User.query(User.name == request.user_name).get():
-            raise endpoints.ConflictException('User already exists!')
+            raise endpoints.ConflictException('User already exists')
         User(name=request.user_name, email=request.email).put()
-        return GenericMessage(message='User {} created!'\
-            .format(request.user_name))
-
+        return GenericForm(message='User {} created'.format(request.user_name))
 
     @endpoints.method(request_message=CURRENT_GAMES_REQUEST,
-                      response_message=UserGameResponse,
+                      response_message=UserGameForm,
                       path='user/games',
                       name='get_user_games',
                       http_method='GET')
     def get_user_games(self, request):
-        """Returns all of a user's active and inactive (done) games"""
+        """Returns a list of games by User"""
         user = User.query(User.name == request.user_name).get()
         if not user:
             raise endpoints.NotFoundException('User does not exist!')
 
         games = Game.query(Game.user == user.key).fetch()
         activeGames = []
-        inactiveGames = []
+        completedGames = []
         for game in games:
             if (game.game_over == False):
                 activeGames.append(game.key.id())
             else:
-                inactiveGames.append(game.key.id())
-
-        return UserGameResponse(user_name=request.user_name,
-                                activeGameIds=activeGames,
-                                inactiveGameIds=inactiveGames)
-
-
-    @endpoints.method(request_message=GET_GAME_REQUEST,
-                      response_message=GameResponse,
-                      path='game/{urlsafe_game_key}',
-                      name='get_game',
-                      http_method='GET')
-    def get_game(self, request):
-        """Return the current game state."""
-        game = get_by_urlsafe(request.urlsafe_game_key, Game)
-        if game:
-            return game.to_form('Success')
-        else:
-            raise endpoints.NotFoundException('Game not found!')
-
+                completedGames.append(game.key.id())
+        return UserGameForm(user_name=request.user_name,
+                            activeGameIds=activeGames,
+                            completedGameIds=completedGames)
 
     @endpoints.method(request_message=NEW_GAME_REQUEST,
-                      response_message=GameResponse,
+                      response_message=GameForm,
                       path='game',
                       name='new_game',
                       http_method='POST')
@@ -146,7 +86,7 @@ class WarApi(remote.Service):
         """Creates new game"""
         user = User.query(User.name == request.user_name).get()
         if not user:
-            raise endpoints.NotFoundException('User does not exist!')
+            raise endpoints.NotFoundException('User does not exist')
 
         try:
             game = Game.new_game(user.key)
@@ -156,8 +96,22 @@ class WarApi(remote.Service):
         return game.to_form('Successfully created a new game!')
 
 
+    @endpoints.method(request_message=GET_GAME_REQUEST,
+                      response_message=GameForm,
+                      path='game/{urlsafe_game_key}',
+                      name='get_game',
+                      http_method='GET')
+    def get_game(self, request):
+        """Returns the current game state"""
+        game = get_by_urlsafe(request.urlsafe_game_key, Game)
+        if game:
+            return game.to_form('Successfully retrieved game')
+        else:
+            raise endpoints.NotFoundException('Game not found')
+
+
     @endpoints.method(request_message=CANCEL_GAME_REQUEST,
-                      response_message=GenericMessage,
+                      response_message=GenericForm,
                       path='game/{urlsafe_game_key}/cancel',
                       name='cancel_game',
                       http_method='PUT')
@@ -166,71 +120,112 @@ class WarApi(remote.Service):
         game = get_by_urlsafe(request.urlsafe_game_key, Game)
         if game:
             if game.game_over:
-                return GenericMessage(message="Game already over")
+                return GenericForm(message="Game already over")
             game.key.delete()
-            return GenericMessage(message='Game was canceled')
+            return GenericForm(message='Game was canceled')
         else:
-            raise endpoints.NotFoundException('Game not found!')
+            raise endpoints.NotFoundException('Game not found')
+
+
+    @endpoints.method(request_message=GET_GAME_REQUEST,
+                      response_message=GameHistoryForm,
+                      path='game/{urlsafe_game_key}/history',
+                      name='get_game_history',
+                      http_method='GET')
+    def get_game_history(self, request):
+        """Returns a record of plays made during a game"""
+        game = get_by_urlsafe(request.urlsafe_game_key, Game)
+        return GameHistoryForm(user_name=game.user.get().name,
+                               history=game.history)
+
+
+    def _getRank(self, card):
+        """Returns the numeric representation of a given card"""
+        return { '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8, '9': 9,
+            '10': 10, 'J': 11, 'Q': 12, 'K': 13, 'A': 14 }[card]
+
+
+    def _handleBattleRound(self, game, war_card_pool=[]):
+        """Handles the battle round"""
+        user_card = ''
+        bot_card = ''
+        result = ''
+
+        if game.user_deck and game.bot_deck: # not empty
+            # Get the first card from each player's deck
+            user_card = game.user_deck.pop(0)
+            bot_card = game.bot_deck.pop(0)
+
+            # Get the integer value of the card
+            user_card_value = self._getRank(user_card)
+            bot_card_value = self._getRank(bot_card)
+
+            if user_card_value > bot_card_value:
+                result = 'Player won'
+                game.user_deck.extend([user_card, bot_card] + war_card_pool)
+                war_card_pool  = []
+            elif user_card_value < bot_card_value:
+                result = 'Bot won'
+                game.bot_deck.extend([user_card, bot_card] + war_card_pool)
+                war_card_pool  = []
+            else:
+                result = 'It\'s a war'
+                war_card_pool.extend([user_card] + [bot_card])
+                if game.user_deck and game.bot_deck:
+                    war_card_pool.extend([game.user_deck.pop(0)])
+                    war_card_pool.extend([game.bot_deck.pop(0)])
+                self._handleBattleRound(game, war_card_pool)
+
+            roundInfo = GameRoundForm(user_card=user_card,
+                                      bot_card=bot_card,
+                                      result=result)
+            game.history.append(roundInfo)
+            game.put()
+
+        if not game.user_deck:
+            result = 'Game over. Bot won'
+            roundInfo = GameRoundForm(user_card=user_card,
+                                      bot_card=bot_card,
+                                      result=result)
+            game.history.append(roundInfo)
+            game.end_game(False)
+        elif not game.bot_deck:
+            result = 'Game over. Player won'
+            roundInfo = GameRoundForm(user_card=user_card,
+                                      bot_card=bot_card,
+                                      result=result)
+            game.history.append(roundInfo)
+            game.end_game(True)
+
+        return result
 
 
     @endpoints.method(request_message=BATTLE_REQUEST,
-                      response_message=GameResponse,
+                      response_message=GameForm,
                       path='game/{urlsafe_game_key}/battle',
                       name='battle',
                       http_method='PUT')
     def battle(self, request):
-        """Battle -- reveal top card from deck. Returns the game state"""
+        """Returns the game state"""
         game = get_by_urlsafe(request.urlsafe_game_key, Game)
         if game.game_over:
             return game.to_form('Game already over')
-
-        # Get the first card from each player's deck
-        user_card = game.user_deck.pop(0)
-        bot_card = game.bot_deck.pop(0)
-
-        # Get the integer value of the card
-        user_card_value = self._getRank(user_card)
-        bot_card_value = self._getRank(bot_card)
-
-        # Analyze battle
-        if (user_card_value > bot_card_value):
-            msg = 'You win this round! '
-            game.user_deck.extend([user_card, bot_card])
-        elif (user_card_value < bot_card_value):
-            msg = 'The bot won this time... '
-            game.bot_deck.extend([user_card, bot_card])
-        else:
-            results = self._handleWarRound(user_card, bot_card, game)
-            user_deck = results[0].user_deck
-            bot_deck = results[0].bot_deck
-            msg = results[1]
-
-        if not game.user_deck:
-            game.end_game(False)
-            return game.to_form('You lose. Game over!')
-        elif not game.bot_deck:
-            game.end_game(True)
-            return game.to_form('You win. Game over!')
-        else:
-            game.put()
-            return game.to_form(msg)
+        results = self._handleBattleRound(game)
+        return game.to_form(results)
 
 
-    @endpoints.method(response_message=UserRankingResponse,
+    @endpoints.method(response_message=UserRankingForm,
                       path='user_rankings',
                       name='get_user_rankings',
                       http_method='GET')
     def get_user_rankings(self, request):
-        """Returns a list of users ordered by number of wins."""
-        rankings = []
+        """Returns a user rankings ordered by number of wins."""
         users = User.query().order(-User.wins)
+        rankings = []
         for user in users:
-            stats = UserStats(user_name=user.name, wins=user.wins)
+            stats = UserStatsForm(user_name=user.name, wins=user.wins)
             rankings.append(stats)
-        return UserRankingResponse(message='Success', rankings=rankings)
+        return UserRankingForm(message='Success', rankings=rankings)
 
-
-    ## TODO add ability to track a game history
-    ## get_game_history
 
 api = endpoints.api_server([WarApi])
