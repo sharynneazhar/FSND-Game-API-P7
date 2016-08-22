@@ -46,8 +46,6 @@ class Game(ndb.Model):
         form.urlsafe_key = self.key.urlsafe()
         form.user_name = self.user.get().name
         form.game_over = self.game_over
-        form.user_card_count = len(self.user_deck)
-        form.bot_card_count = len(self.bot_deck)
         form.message = message
         return form
 
