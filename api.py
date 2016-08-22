@@ -171,58 +171,42 @@ class WarApi(remote.Service):
             else:
                 result = 'It\'s a war'
                 war_card_pool.extend([user_card] + [bot_card])
+                roundInfo = GameRoundForm(user_card=user_card,
+                                          bot_card=bot_card,
+                                          result=result)
+                game.history.append(roundInfo)
 
                 if game.user_deck:
                     war_card_pool.extend([game.user_deck.pop(0)])
                 else:
                     result = 'Game over. Bot won'
                     game.bot_deck.extend(war_card_pool)
-                    roundInfo = GameRoundForm(user_card=user_card,
-                                              bot_card=bot_card,
-                                              result=result)
-                    game.history.append(roundInfo)
                     game.put()
                     game.end_game(False)
-                    return result
 
                 if game.bot_deck:
                     war_card_pool.extend([game.bot_deck.pop(0)])
                 else:
                     result = 'Game over. Player won'
                     game.user_deck.extend(war_card_pool)
-                    roundInfo = GameRoundForm(user_card=user_card,
-                                              bot_card=bot_card,
-                                              result=result)
-                    game.history.append(roundInfo)
                     game.put()
                     game.end_game(True)
-                    return result
 
-                self._handleBattleRound(game, war_card_pool=war_card_pool)
-
-            roundInfo = GameRoundForm(user_card=user_card,
-                                      bot_card=bot_card,
-                                      result=result)
-            game.history.append(roundInfo)
-            game.put()
+                game.put()
+                return self._handleBattleRound(game, war_card_pool=war_card_pool)
 
         if not game.user_deck:
             result = 'Game over. Bot won'
-            roundInfo = GameRoundForm(user_card=user_card,
-                                      bot_card=bot_card,
-                                      result=result)
-            game.history.append(roundInfo)
-            game.put()
             game.end_game(False)
         elif not game.bot_deck:
             result = 'Game over. Player won'
-            roundInfo = GameRoundForm(user_card=user_card,
-                                      bot_card=bot_card,
-                                      result=result)
-            game.history.append(roundInfo)
-            game.put()
             game.end_game(True)
 
+        roundInfo = GameRoundForm(user_card=user_card,
+                                  bot_card=bot_card,
+                                  result=result)
+        game.history.append(roundInfo)
+        game.put()
         return result
 
 
