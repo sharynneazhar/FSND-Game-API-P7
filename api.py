@@ -167,14 +167,19 @@ class WarApi(remote.Service):
                 result = 'Bot won.'
                 game.bot_deck.extend([user_card, bot_card] + war_card_pool)
                 war_card_pool  = []
-            else:
+            else: # equal card values
                 result = 'It\'s a war.'
+
+                # add the current cards to the winning pool
                 war_card_pool.extend([user_card] + [bot_card])
                 roundInfo = GameRoundForm(user_card=user_card,
                                           bot_card=bot_card,
                                           result=result)
                 game.history.append(roundInfo)
 
+                # in a war, players need to skip one card and battle again
+                # with the next top card. If a player runs out of cards,
+                # the game is over
                 if game.user_deck:
                     war_card_pool.extend([game.user_deck.pop(0)])
                 else:
