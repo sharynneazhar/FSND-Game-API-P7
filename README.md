@@ -9,8 +9,10 @@ running by visiting the API Explorer - by default `localhost:8080/_ah/api/explor
 3.  (Optional) Generate your client library(ies) with the endpoints tool.
 Deploy your application.
 
+While launching chrome to test your API, you will have to launch it using the console as follows: `[path-to-Chrome] --user-data-dir=test --unsafely-treat-insecure-origin-as-secure=http://localhost:port`
+
 ### Game Description:
-War is a card game typically involving two players. It uses a standard playing card deck. However, the app will only use 26 cards to keep the game short.
+War is a card game typically involving two players - a human player and a bot. It uses a standard playing card deck. However, the app will only use 26 cards to keep the game short.
 
 The objective of the game is to win all the cards.
 

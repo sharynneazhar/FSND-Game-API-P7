@@ -1,0 +1,31 @@
+For this project, I decided to implement the classic card game called War. The game is described in the README page here: https://github.com/sharynneazhar/FSND-Game-API-P7#game-description
+
+The deck of cards were created using a list which were then evenly divided up into two sublists assigned to each player. How each battle round works is just by popping "cards" off each list.
+
+Hence, the Game model was changed to include the following properties:
+- **user**: User entity associated with the game
+- **user_deck**: Deck of cards the user holds
+- **bot_deck**: Deck of cards the bot holds
+- **game_over**: State of the game
+- **history**: List of records containing information about each round
+
+The User model was changed to include the **number of wins** for that user which were used in displaying the user rankings.
+
+I've also decided to only implement the game with 26 cards to keep the game short.
+
+****
+
+The biggest struggle I faced while implementing the game was how to handle the war round which happens when both players have equal card values. The logic can be implemented by using a series of if/else statements, however, it wasn't an efficient or pretty solution. I would be writing the same checks over and over again. So, I thought what if I used recursion? I wasn't really sure how recursion would work with an endpoint method, so I decided to split out the entire logic for the battle into its own function and recurse when a war happens.
+
+Another big problem I ran into was recording the history with the recursion solution. Early implementations recorded the results multiple times due to the recursive nature of the code. However, after long hours of debugging and tracing through the steps, I found the proper sequence of steps to prevents that.
+
+I also ran into an issue in comparing the card values. After a few tests, I realized that the logic was wrong when comparing the face cards (i.e. A, K, Q, J). For example, since Ace is high, we expect the comparison `A > K` to be true. However, it is false because the default is alphabetically. Therefore, I had to implement a function to retrieve the numeric value of the face cards from a dictionary before comparing them.
+
+Lastly, I struggled quite a bit with the property types for NDB. For example, a list of strings would be implemented using the `StringProperty` with `repeated=True` instead of `StringListProperty`. Also, I learned to use the `MessageProperty` to represent structured data such as `GameRoundForm` which contained information about the cards in play and the result of a particular round.
+
+****
+
+Future Improvements:
+- Add the ability to play this game with another human player
+- Add the ability to play this game where suit matters
+- Add the ability to send the other player a message
