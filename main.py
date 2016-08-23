@@ -2,11 +2,9 @@
 
 """main.py - This file contains handlers that are called by taskqueue and/or
 cronjobs."""
-import logging
 
 import webapp2
 from google.appengine.api import mail, app_identity
-from api import WarApi
 
 from models import User, Game
 
@@ -16,11 +14,11 @@ class SendReminderEmail(webapp2.RequestHandler):
         """Send a reminder email to each User with an email about games.
         Called every hour using a cron job"""
         app_id = app_identity.get_application_id()
-        users = User.query(User.email is not None)
+        users = User.query(User.email != None)
 
         for user in users:
             games = Game.query(Game.user == user.key,
-                               Game.game_over is not False)
+                               Game.game_over != False)
             for game in games:
                 if game:
                     subject = 'This is a reminder!'
