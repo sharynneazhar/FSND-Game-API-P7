@@ -30,12 +30,13 @@ class Game(ndb.Model):
     def new_game(cls, user):
         """Creates and returns a new game"""
         # Generate card deck and shuffle - 26 cards to keep the game short
-        deck = ['2','3','4','5','6','7','8','9','10','J','Q','K','A'] * 2
+        deck = ['2', '3', '4', '5', '6', '7', '8', '9',
+                '10', 'J', 'Q', 'K', 'A'] * 2
         random.shuffle(deck)
         deck1 = deck[0:13]
         deck2 = deck[13:26]
         game = Game(user=user, user_deck=deck1,
-            bot_deck=deck2, game_over=False)
+                    bot_deck=deck2, game_over=False)
         game.put()
         return game
 

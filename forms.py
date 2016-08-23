@@ -2,6 +2,7 @@
 
 from protorpc import messages
 
+
 class GenericForm(messages.Message):
     """Generic string message"""
     message = messages.StringField(1, required=True)

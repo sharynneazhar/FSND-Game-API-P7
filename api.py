@@ -1,41 +1,31 @@
 # -*- coding: utf-8 -*-`
 """api.py"""
 
-import random
-import logging
 import endpoints
 
 from protorpc import remote, messages
-from google.appengine.api import memcache
-from google.appengine.api import taskqueue
+from utils import get_by_urlsafe
 
 from models import User
 from models import Game
 
-from forms import GenericForm
-from forms import GameForm
-from forms import UserGameForm
-from forms import UserStatsForm
-from forms import UserRankingForm
-from forms import GameRoundForm
-from forms import GameHistoryForm
-
-from utils import get_by_urlsafe
-
+from forms import (
+    GenericForm,
+    GameForm,
+    UserGameForm,
+    UserStatsForm,
+    UserRankingForm,
+    GameRoundForm,
+    GameHistoryForm,
+)
 
 USER_REQUEST = endpoints.ResourceContainer(
-    user_name = messages.StringField(1),
-    email = messages.StringField(2))
-NEW_GAME_REQUEST = endpoints.ResourceContainer(
-    user_name = messages.StringField(1))
-GET_GAME_REQUEST = endpoints.ResourceContainer(
-    urlsafe_game_key = messages.StringField(1))
-CANCEL_GAME_REQUEST = endpoints.ResourceContainer(
-    urlsafe_game_key = messages.StringField(1))
-ACTIVE_GAMES_REQUEST = endpoints.ResourceContainer(
-    user_name = messages.StringField(1))
-BATTLE_REQUEST = endpoints.ResourceContainer(
-    urlsafe_game_key = messages.StringField(1))
+    user_name=messages.StringField(1),
+    email=messages.StringField(2))
+USERNAME_REQUEST = endpoints.ResourceContainer(
+    user_name=messages.StringField(1))
+GAME_REQUEST = endpoints.ResourceContainer(
+    urlsafe_game_key=messages.StringField(1))
 
 
 @endpoints.api(name='war', version='v1')
@@ -54,7 +44,7 @@ class WarApi(remote.Service):
         User(name=request.user_name, email=request.email).put()
         return GenericForm(message='User {} created'.format(request.user_name))
 
-    @endpoints.method(request_message=ACTIVE_GAMES_REQUEST,
+    @endpoints.method(request_message=USERNAME_REQUEST,
                       response_message=UserGameForm,
                       path='user/active_games',
                       name='get_user_games',
@@ -68,7 +58,7 @@ class WarApi(remote.Service):
         games = Game.query(Game.user == user.key).fetch()
         activeGames = []
         for game in games:
-            if (game.game_over == False):
+            if game.game_over is False:
                 activeGames.append(game.key.id())
             else:
                 return UserGameForm(user_name=request.user_name,
@@ -76,7 +66,7 @@ class WarApi(remote.Service):
         return UserGameForm(user_name=request.user_name,
                             activeGameIds=activeGames)
 
-    @endpoints.method(request_message=NEW_GAME_REQUEST,
+    @endpoints.method(request_message=USERNAME_REQUEST,
                       response_message=GameForm,
                       path='game',
                       name='new_game',
@@ -94,8 +84,7 @@ class WarApi(remote.Service):
 
         return game.to_form('Successfully created a new game!')
 
-
-    @endpoints.method(request_message=GET_GAME_REQUEST,
+    @endpoints.method(request_message=GAME_REQUEST,
                       response_message=GameForm,
                       path='game/{urlsafe_game_key}',
                       name='get_game',
@@ -108,8 +97,7 @@ class WarApi(remote.Service):
         else:
             raise endpoints.NotFoundException('Game not found')
 
-
-    @endpoints.method(request_message=CANCEL_GAME_REQUEST,
+    @endpoints.method(request_message=GAME_REQUEST,
                       response_message=GenericForm,
                       path='game/{urlsafe_game_key}/cancel',
                       name='cancel_game',
@@ -125,8 +113,7 @@ class WarApi(remote.Service):
         else:
             raise endpoints.NotFoundException('Game not found')
 
-
-    @endpoints.method(request_message=GET_GAME_REQUEST,
+    @endpoints.method(request_message=GAME_REQUEST,
                       response_message=GameHistoryForm,
                       path='game/{urlsafe_game_key}/history',
                       name='get_game_history',
@@ -137,12 +124,10 @@ class WarApi(remote.Service):
         return GameHistoryForm(user_name=game.user.get().name,
                                history=game.history)
 
-
     def _getRank(self, card):
         """Returns the numeric representation of a given card"""
-        return { '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8,
-            '9': 9, '10': 10, 'J': 11, 'Q': 12, 'K': 13, 'A': 14 }[card]
-
+        return {'2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8,
+                '9': 9, '10': 10, 'J': 11, 'Q': 12, 'K': 13, 'A': 14}[card]
 
     def _handleBattleRound(self,
                            game,
@@ -150,7 +135,7 @@ class WarApi(remote.Service):
                            bot_card='',
                            war_card_pool=[]):
         """Handles the battle round"""
-        if game.user_deck and game.bot_deck: # not empty
+        if game.user_deck and game.bot_deck:  # not empty
             # Get the first card from each player's deck
             user_card = game.user_deck.pop(0)
             bot_card = game.bot_deck.pop(0)
@@ -162,12 +147,12 @@ class WarApi(remote.Service):
             if user_card_value > bot_card_value:
                 result = 'Player won.'
                 game.user_deck.extend([user_card, bot_card] + war_card_pool)
-                war_card_pool  = []
+                war_card_pool = []
             elif user_card_value < bot_card_value:
                 result = 'Bot won.'
                 game.bot_deck.extend([user_card, bot_card] + war_card_pool)
-                war_card_pool  = []
-            else: # equal card values
+                war_card_pool = []
+            else:  # equal card values
                 result = 'It\'s a war.'
 
                 # add the current cards to the winning pool
@@ -197,7 +182,8 @@ class WarApi(remote.Service):
                     game.end_game(True)
 
                 game.put()
-                return self._handleBattleRound(game, war_card_pool=war_card_pool)
+                return self._handleBattleRound(game,
+                                               war_card_pool=war_card_pool)
 
         if not game.user_deck:
             result = 'Game over. Bot won.'
@@ -213,8 +199,7 @@ class WarApi(remote.Service):
         game.put()
         return result
 
-
-    @endpoints.method(request_message=BATTLE_REQUEST,
+    @endpoints.method(request_message=GAME_REQUEST,
                       response_message=GameForm,
                       path='game/{urlsafe_game_key}/battle',
                       name='battle',
@@ -226,7 +211,6 @@ class WarApi(remote.Service):
             return game.to_form('Game already over.')
         result = self._handleBattleRound(game)
         return game.to_form(result)
-
 
     @endpoints.method(response_message=UserRankingForm,
                       path='rankings',
