@@ -12,14 +12,18 @@ class GameForm(messages.Message):
     """Returns game information"""
     urlsafe_key = messages.StringField(1, required=True)
     user_name = messages.StringField(2, required=True)
-    message = messages.StringField(5, required=True)
-    game_over = messages.BooleanField(6, required=True)
+    user_card = messages.StringField(3)
+    bot_card = messages.StringField(4)
+    user_card_count = messages.IntegerField(5, default=0)
+    bot_card_count = messages.IntegerField(6, default=0)
+    message = messages.StringField(7, required=True)
+    game_over = messages.BooleanField(8, required=True)
 
 
 class UserGameForm(messages.Message):
     """Returns a list of games in play"""
     user_name = messages.StringField(1, required=True)
-    activeGameIds = messages.IntegerField(2, repeated=True)
+    activeGames = messages.StringField(2, repeated=True)
     message = messages.StringField(3)
 
 

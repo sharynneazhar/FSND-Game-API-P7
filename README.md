@@ -20,6 +20,8 @@ The deck is divided evenly among the two players. In unison, each player reveals
 
 If the two cards played are of equal value, then there is a "war". Both players place the next card from their deck face down in a pool and battle with the next top card of their deck. The higher face-up card wins the war and adds all six cards to the bottom of their deck. If the face-up cards are again equal then the battle repeats with another set of cards. This repeats until one player's face-up card is higher than their opponent's. A player will lose if their deck is empty or runs out of cards during a war.
 
+Score keeping: User ranking is calculated based on the number of games won.
+
 ### Files Included:
 - api.py: Contains endpoints and game playing logic.
 - app.yaml: App configuration.
@@ -62,7 +64,7 @@ existing user - will raise a NotFoundException if not.
 
 **cancel_game**
 - Path: 'game/{urlsafe_game_key}/cancel'
-- Method: PUT
+- Method: DELETE
 - Parameters: urlsafe_game_key
 - Returns: Message confirming game cancellation.
 - Description: Accepts the game key and deletes the entity from the datastore. Returns a NotFoundException if a Game with the game key does not exist
@@ -79,7 +81,7 @@ existing user - will raise a NotFoundException if not.
 - Method: PUT
 - Parameters: urlsafe_game_key
 - Returns: GameForm with new game state.
-- Description: Simulates the card battle and returns the updated state of the game. A record of moves will be recorded at the each of each round. If the User wins the game, a corresponding User win record will be incremented.
+- Description: Simulates the card battle and returns the updated state of the game. A record of moves will be recorded at the each of each round. If the User wins the game, a corresponding User win record will be incremented. Note: You may uncomment lines 34-36 in `models.py` to test war and game over cases
 
 **get_user_rankings**
 - Path: 'rankings'

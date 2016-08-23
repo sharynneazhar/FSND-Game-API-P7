@@ -59,12 +59,12 @@ class WarApi(remote.Service):
         activeGames = []
         for game in games:
             if game.game_over is False:
-                activeGames.append(game.key.id())
+                activeGames.append(game.key.urlsafe())
             else:
                 return UserGameForm(user_name=request.user_name,
                                     message='User has no active games')
         return UserGameForm(user_name=request.user_name,
-                            activeGameIds=activeGames)
+                            activeGames=activeGames)
 
     @endpoints.method(request_message=USERNAME_REQUEST,
                       response_message=GameForm,
@@ -82,7 +82,7 @@ class WarApi(remote.Service):
         except ValueError:
             raise endpoints.BadRequestException('Error creating new game.')
 
-        return game.to_form('Successfully created a new game!')
+        return game.to_form({'message': 'Successfully created a new game!'})
 
     @endpoints.method(request_message=GAME_REQUEST,
                       response_message=GameForm,
@@ -93,7 +93,7 @@ class WarApi(remote.Service):
         """Returns the current game state"""
         game = get_by_urlsafe(request.urlsafe_game_key, Game)
         if game:
-            return game.to_form('Successfully retrieved game')
+            return game.to_form({'message': 'Successfully retrieved game'})
         else:
             raise endpoints.NotFoundException('Game not found')
 
@@ -101,7 +101,7 @@ class WarApi(remote.Service):
                       response_message=GenericForm,
                       path='game/{urlsafe_game_key}/cancel',
                       name='cancel_game',
-                      http_method='PUT')
+                      http_method='DELETE')
     def cancel_game(self, request):
         """Cancels an active game."""
         game = get_by_urlsafe(request.urlsafe_game_key, Game)
@@ -121,8 +121,11 @@ class WarApi(remote.Service):
     def get_game_history(self, request):
         """Returns a record of plays made during a game"""
         game = get_by_urlsafe(request.urlsafe_game_key, Game)
-        return GameHistoryForm(user_name=game.user.get().name,
-                               history=game.history)
+        if game:
+            return GameHistoryForm(user_name=game.user.get().name,
+                                   history=game.history)
+        else:
+            raise endpoints.NotFoundException('Game not found')
 
     def _getRank(self, card):
         """Returns the numeric representation of a given card"""
@@ -135,7 +138,15 @@ class WarApi(remote.Service):
                            bot_card='',
                            war_card_pool=[]):
         """Handles the battle round"""
-        if game.user_deck and game.bot_deck:  # not empty
+        if not game.user_deck:
+            result = 'Game over. Bot won.'
+            game.bot_deck.extend(war_card_pool)
+            game.end_game(False)
+        elif not game.bot_deck:
+            result = 'Game over. Player won.'
+            game.user_deck.extend(war_card_pool)
+            game.end_game(True)
+        else:  # not empty
             # Get the first card from each player's deck
             user_card = game.user_deck.pop(0)
             bot_card = game.bot_deck.pop(0)
@@ -154,7 +165,6 @@ class WarApi(remote.Service):
                 war_card_pool = []
             else:  # equal card values
                 result = 'It\'s a war.'
-
                 # add the current cards to the winning pool
                 war_card_pool.extend([user_card] + [bot_card])
                 roundInfo = GameRoundForm(user_card=user_card,
@@ -165,10 +175,17 @@ class WarApi(remote.Service):
                 # in a war, players need to skip one card and battle again
                 # with the next top card. If a player runs out of cards,
                 # the game is over
-                if game.user_deck:
+                if game.user_deck and game.bot_deck:
+                    game.put()
+                    return self._handleBattleRound(game,
+                                                   user_card=user_card,
+                                                   bot_card=bot_card,
+                                                   war_card_pool=war_card_pool)
+
+                if not game.user_deck:
                     war_card_pool.extend([game.user_deck.pop(0)])
                 else:
-                    result = 'Game over. Bot won it all in the war.'
+                    result = 'Game over. Bot won.'
                     game.bot_deck.extend(war_card_pool)
                     game.put()
                     game.end_game(False)
@@ -176,28 +193,21 @@ class WarApi(remote.Service):
                 if game.bot_deck:
                     war_card_pool.extend([game.bot_deck.pop(0)])
                 else:
-                    result = 'Game over. Player won it all in the war.'
+                    result = 'Game over. Player won.'
                     game.user_deck.extend(war_card_pool)
                     game.put()
                     game.end_game(True)
-
-                game.put()
-                return self._handleBattleRound(game,
-                                               war_card_pool=war_card_pool)
-
-        if not game.user_deck:
-            result = 'Game over. Bot won.'
-            game.end_game(False)
-        elif not game.bot_deck:
-            result = 'Game over. Player won.'
-            game.end_game(True)
 
         roundInfo = GameRoundForm(user_card=user_card,
                                   bot_card=bot_card,
                                   result=result)
         game.history.append(roundInfo)
         game.put()
-        return result
+        return {
+            'message': result,
+            'user_card': user_card,
+            'bot_card': bot_card
+        }
 
     @endpoints.method(request_message=GAME_REQUEST,
                       response_message=GameForm,
@@ -208,7 +218,7 @@ class WarApi(remote.Service):
         """Returns the game state"""
         game = get_by_urlsafe(request.urlsafe_game_key, Game)
         if game.game_over:
-            return game.to_form('Game already over.')
+            return game.to_form({'message': 'Game already over.'})
         result = self._handleBattleRound(game)
         return game.to_form(result)
 

@@ -45,6 +45,7 @@ result of a particular round.
 ****
 
 Future Improvements:
+- Add the ability to reshuffle the deck when the game becomes impossible
 - Add the ability to play this game with another human player
 - Add the ability to play this game where suit matters
 - Add the ability to send the other player a message

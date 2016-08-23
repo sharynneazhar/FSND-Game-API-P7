@@ -19,9 +19,10 @@ class SendReminderEmail(webapp2.RequestHandler):
         users = User.query(User.email is not None)
 
         for user in users:
-            games = Game.query(Game.user == user.key).fetch()
+            games = Game.query(Game.user == user.key,
+                               Game.game_over is not False)
             for game in games:
-                if game.game_over is not False:
+                if game:
                     subject = 'This is a reminder!'
                     body = 'Hey {}, the battle isn\'t over!'.format(user.name)
                     # This sends test emails, the arguments to send_mail are:
@@ -31,15 +32,6 @@ class SendReminderEmail(webapp2.RequestHandler):
                                    subject,
                                    body)
 
-
-class UpdateAverageMovesRemaining(webapp2.RequestHandler):
-    def post(self):
-        """Update game listing announcement in memcache."""
-        GuessANumberApi._cache_average_attempts()
-        self.response.set_status(204)
-
-
 app = webapp2.WSGIApplication([
     ('/crons/send_reminder', SendReminderEmail),
-    ('/tasks/cache_average_attempts', UpdateAverageMovesRemaining),
 ], debug=True)

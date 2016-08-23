@@ -32,21 +32,29 @@ class Game(ndb.Model):
         # Generate card deck and shuffle - 26 cards to keep the game short
         deck = ['2', '3', '4', '5', '6', '7', '8', '9',
                 '10', 'J', 'Q', 'K', 'A'] * 2
+        # uncomment these lines to test war cases and to end the game faster
+        # deck = ['2', '2', '2', '2', '2', '2', '2', '2',
+        #         '2', '2', '2', 'K', 'A'] * 2
         random.shuffle(deck)
         deck1 = deck[0:13]
         deck2 = deck[13:26]
         game = Game(user=user, user_deck=deck1,
-                    bot_deck=deck2, game_over=False)
+                    bot_deck=deck2)
         game.put()
         return game
 
-    def to_form(self, message):
+    def to_form(self, result):
         """Returns the response data of the game object"""
         form = GameForm()
         form.urlsafe_key = self.key.urlsafe()
         form.user_name = self.user.get().name
+        if ('user_card' in result) and ('bot_card' in result):
+            form.user_card = result['user_card']
+            form.bot_card = result['bot_card']
+        form.user_card_count = len(self.user_deck)
+        form.bot_card_count = len(self.bot_deck)
         form.game_over = self.game_over
-        form.message = message
+        form.message = result['message']
         return form
 
     def end_game(self, won=False):
